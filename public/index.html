@@ -4,90 +4,175 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Дашборд эффективных часов</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,500;0,6..96,700;0,6..96,900;1,6..96,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet" />
 <style>
   :root {
-    --green: #4caf50;
-    --green-dark: #2e7d32;
-    --green-light: #e3f7e3;
-    --red: #d32f2f;
-    --border: #e2e6ea;
-    --muted: #7a828a;
-    --bg: #f4f6f8;
+    --ink: #11100e;
+    --paper: #f7f4ee;
+    --line: #cfc8bb;
+    --line-soft: #e3ddd1;
+    --muted: #8c8475;
+    /* семантика статусов (требования) — приглушённые редакционные оттенки */
+    --done-bg: #e7efe2;      /* светло-зелёный фон завершённой строки */
+    --over: #9b2f2f;         /* потрачено больше плана — красный */
+    --under: #2f5b33;        /* потрачено меньше плана — тёмно-зелёный */
   }
   * { box-sizing: border-box; }
+  html, body { height: 100%; }
   body {
-    margin: 0; background: var(--bg); color: #1f2329;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    font-size: 14px;
+    margin: 0; color: var(--ink);
+    background:
+      radial-gradient(60vw 60vw at 12% -8%, #efe6d8 0%, rgba(239,230,216,0) 60%),
+      radial-gradient(55vw 55vw at 95% 8%, #e8e2ee 0%, rgba(232,226,238,0) 55%),
+      radial-gradient(70vw 50vw at 80% 100%, #ece3d6 0%, rgba(236,227,214,0) 60%),
+      var(--paper);
+    background-attachment: fixed;
+    font-family: "Jost", -apple-system, "Helvetica Neue", Arial, sans-serif;
+    font-weight: 300; font-size: 14px; letter-spacing: .01em;
+    -webkit-font-smoothing: antialiased;
   }
-  .wrap { max-width: 1200px; margin: 0 auto; padding: 24px 20px 60px; }
-  h1 { font-size: 22px; margin: 0 0 20px; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 40px 28px 80px; }
 
+  /* ---- masthead ---- */
+  .masthead { text-align: center; margin-bottom: 14px; }
+  .masthead .eyebrow {
+    font-size: 11px; letter-spacing: .42em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 12px;
+  }
+  .masthead h1 {
+    font-family: "Bodoni Moda", "Didot", "Bodoni MT", Georgia, serif;
+    font-weight: 900; font-size: clamp(48px, 9vw, 104px); line-height: .92;
+    margin: 0; letter-spacing: .01em; text-transform: uppercase;
+  }
+  .masthead .sub {
+    font-family: "Bodoni Moda", Georgia, serif; font-style: italic; font-weight: 400;
+    font-size: clamp(15px, 2.4vw, 20px); color: #3b3833; margin-top: 10px;
+  }
+  .rule { border: 0; border-top: 1px solid var(--ink); margin: 22px 0 30px; }
+  .rule.thin { border-top: 1px solid var(--line); margin: 0 0 26px; }
+
+  /* ---- filters (frosted glass panel) ---- */
   .filters {
-    background: #fff; border: 1px solid var(--border); border-radius: 12px;
-    padding: 18px 20px; display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-end;
-    box-shadow: 0 1px 3px rgba(0,0,0,.04);
+    background: rgba(255,255,255,0.42);
+    backdrop-filter: blur(18px) saturate(150%);
+    -webkit-backdrop-filter: blur(18px) saturate(150%);
+    border: 1px solid rgba(255,255,255,0.6);
+    box-shadow: 0 12px 40px rgba(40,34,24,0.10);
+    padding: 26px 28px; display: flex; flex-wrap: wrap; gap: 26px; align-items: flex-end;
+    border-radius: 2px;
   }
-  .field { display: flex; flex-direction: column; gap: 6px; }
-  .field label { font-size: 12px; color: var(--muted); font-weight: 600; }
+  .field { display: flex; flex-direction: column; gap: 9px; }
+  .field label {
+    font-size: 10px; letter-spacing: .26em; text-transform: uppercase;
+    color: var(--muted); font-weight: 400;
+  }
   .field input, .field select {
-    height: 38px; border: 1px solid var(--border); border-radius: 8px; padding: 0 10px;
-    font-size: 14px; background: #fff; min-width: 150px;
+    height: 40px; border: 0; border-bottom: 1px solid var(--ink);
+    background: transparent; padding: 0 2px; min-width: 160px;
+    font-family: "Jost", sans-serif; font-size: 15px; color: var(--ink);
+    border-radius: 0;
   }
-  .field select { min-width: 240px; }
-  .dates { display: flex; gap: 8px; align-items: flex-end; }
+  .field input:focus, .field select:focus { outline: none; border-bottom-color: #6a6253; }
+  .field select { min-width: 260px; }
+  .field input[type="number"] { min-width: 150px; }
+  .dates { display: flex; gap: 22px; align-items: flex-end; }
+
+  /* ---- glass apply button ---- */
   .apply-btn {
-    height: 38px; padding: 0 22px; background: var(--green); color: #fff; border: none;
-    border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
-    transition: background .15s;
+    position: relative; height: 52px; padding: 0 42px; cursor: pointer;
+    background: rgba(255,255,255,0.20);
+    backdrop-filter: blur(14px) saturate(180%);
+    -webkit-backdrop-filter: blur(14px) saturate(180%);
+    border: 1px solid rgba(255,255,255,0.65);
+    border-radius: 2px; color: var(--ink);
+    font-family: "Bodoni Moda", Georgia, serif; font-weight: 500;
+    font-size: 14px; letter-spacing: .34em; text-transform: uppercase;
+    box-shadow: 0 8px 28px rgba(40,34,24,0.16), inset 0 1px 0 rgba(255,255,255,0.7);
+    transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
   }
-  .apply-btn:hover { background: #43a047; }
-  .apply-btn:disabled { opacity: .6; cursor: default; }
-
-  .status-line { margin: 16px 2px; color: var(--muted); min-height: 18px; }
-  .status-line.error { color: var(--red); }
-
-  .table-card {
-    background: #fff; border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
-    box-shadow: 0 1px 3px rgba(0,0,0,.04); margin-top: 8px;
+  .apply-btn::after {
+    content: ""; position: absolute; inset: 0; border-radius: inherit;
+    background: linear-gradient(135deg, rgba(255,255,255,0.5), rgba(255,255,255,0) 45%);
+    pointer-events: none;
   }
+  .apply-btn:hover { transform: translateY(-1px); background: rgba(255,255,255,0.32); box-shadow: 0 14px 36px rgba(40,34,24,0.22), inset 0 1px 0 rgba(255,255,255,0.8); }
+  .apply-btn:active { transform: translateY(0); }
+  .apply-btn:disabled { opacity: .55; cursor: default; transform: none; }
+
+  .status-line {
+    margin: 26px 2px 4px; color: var(--muted); min-height: 18px;
+    font-size: 12px; letter-spacing: .08em; font-style: italic;
+    font-family: "Bodoni Moda", Georgia, serif;
+  }
+  .status-line.error { color: var(--over); font-style: normal; }
+
+  /* ---- table ---- */
+  .table-card { margin-top: 10px; overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; }
-  th, td { padding: 11px 14px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th, td { padding: 15px 16px; text-align: left; vertical-align: top; }
+  thead th { border-bottom: 1.5px solid var(--ink); border-top: 1.5px solid var(--ink); }
+  tbody td { border-bottom: 1px solid var(--line-soft); }
   th {
-    background: #fafbfc; font-size: 12px; color: #4a525a; font-weight: 700; cursor: pointer;
-    user-select: none; white-space: nowrap; position: sticky; top: 0;
+    font-family: "Jost", sans-serif; font-size: 10px; letter-spacing: .2em;
+    text-transform: uppercase; color: var(--ink); font-weight: 500; cursor: pointer;
+    user-select: none; white-space: nowrap; background: transparent;
   }
-  th:hover { background: #f0f2f5; }
-  th .arrow { color: var(--green); margin-left: 4px; font-size: 11px; }
+  th:hover { color: #6a6253; }
+  th .arrow { margin-left: 5px; font-size: 9px; vertical-align: middle; }
   th.num, td.num { text-align: right; white-space: nowrap; }
-  tr.completed td { background: var(--green-light); }
-  td a { color: #2563eb; text-decoration: none; }
-  td a:hover { text-decoration: underline; }
-  .spent-over { color: var(--red); font-weight: 600; }
-  .spent-under { color: var(--green-dark); font-weight: 600; }
+  td { font-size: 14.5px; }
+  tr.completed td { background: var(--done-bg); }
+  td a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--line); transition: border-color .15s; }
+  td a:hover { border-bottom-color: var(--ink); }
+  .num { font-variant-numeric: tabular-nums; }
+  .spent-over { color: var(--over); font-weight: 400; }
+  .spent-under { color: var(--under); font-weight: 400; }
   .badge {
-    display: inline-block; padding: 3px 9px; border-radius: 20px; font-size: 12px; font-weight: 600;
-    background: #eef1f4; color: #4a525a;
+    display: inline-block; padding: 4px 0; font-size: 10px; font-weight: 500;
+    letter-spacing: .16em; text-transform: uppercase; color: #5a5346;
+    border-bottom: 1px solid transparent;
   }
-  .badge.done { background: #d6f0d6; color: var(--green-dark); }
-  .badge.progress { background: #dbeafe; color: #1e40af; }
-  .badge.wait { background: #fff3d6; color: #92660a; }
-  .badge.deferred { background: #ececec; color: #666; }
-  .empty { padding: 40px; text-align: center; color: var(--muted); }
+  .badge.done { color: var(--under); }
+  .badge.progress { color: #2f4a6b; }
+  .badge.wait { color: #8a6a1f; }
+  .badge.deferred { color: #8c8475; }
+  .empty {
+    padding: 56px; text-align: center; color: var(--muted);
+    font-family: "Bodoni Moda", Georgia, serif; font-style: italic; font-size: 16px;
+  }
 
-  .cards { display: flex; gap: 18px; margin-top: 22px; flex-wrap: wrap; }
+  /* ---- result cards ---- */
+  .cards { display: flex; gap: 26px; margin-top: 40px; flex-wrap: wrap; }
   .card {
-    flex: 1 1 240px; background: #fff; border: 1px solid var(--border); border-radius: 12px;
-    padding: 20px 22px; box-shadow: 0 1px 3px rgba(0,0,0,.04);
+    flex: 1 1 280px; padding: 30px 32px;
+    background: rgba(255,255,255,0.34);
+    backdrop-filter: blur(14px) saturate(150%);
+    -webkit-backdrop-filter: blur(14px) saturate(150%);
+    border: 1px solid rgba(255,255,255,0.6);
+    box-shadow: 0 10px 34px rgba(40,34,24,0.09);
+    border-radius: 2px;
   }
-  .card .card-title { font-size: 13px; color: var(--muted); font-weight: 600; margin-bottom: 10px; }
-  .card .card-value { font-size: 26px; font-weight: 700; color: var(--green-dark); }
-  .card.bonus .card-value { color: #1f2329; }
+  .card .card-title {
+    font-size: 10px; letter-spacing: .28em; text-transform: uppercase;
+    color: var(--muted); font-weight: 400; margin-bottom: 16px;
+  }
+  .card .card-value {
+    font-family: "Bodoni Moda", "Didot", Georgia, serif; font-weight: 500;
+    font-size: 40px; line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums;
+  }
+  .card.bonus .card-value { font-style: italic; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Дашборд эффективных часов</h1>
+  <header class="masthead">
+    <div class="eyebrow">Bitrix24 · Аналитика труда</div>
+    <h1>Effective<br>Hours</h1>
+    <div class="sub">Эффективные часы и подтверждённая премия</div>
+  </header>
+  <hr class="rule" />
 
   <div class="filters">
     <div class="field dates">
