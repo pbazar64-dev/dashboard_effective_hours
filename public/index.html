@@ -6,7 +6,7 @@
 <title>Дашборд эффективных часов</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,500;0,6..96,700;0,6..96,900;1,6..96,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,500;0,6..96,700;0,6..96,900;1,6..96,400&family=Jost:wght@300;400;500&family=Fredoka:wght@500;600&display=swap" rel="stylesheet" />
 <style>
   :root {
     --ink: #11100e;
@@ -34,6 +34,19 @@
     -webkit-font-smoothing: antialiased;
   }
   .wrap { max-width: 1180px; margin: 0 auto; padding: 40px 28px 80px; }
+
+  /* ---- brand / logo (воссоздание ava·tetis) ---- */
+  .brand {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    margin: 0 0 26px;
+  }
+  .brand-word {
+    font-family: "Fredoka", "Baloo 2", "Trebuchet MS", sans-serif; font-weight: 600;
+    font-size: 38px; line-height: 1; color: #8a2d3b; letter-spacing: -.005em;
+  }
+  .brand-word .accent { color: #2f7dc4; }
+  .brand-emblem { display: block; }
+  @media (max-width: 520px) { .brand-word { font-size: 30px; } }
 
   /* ---- masthead ---- */
   .masthead { text-align: center; margin-bottom: 14px; }
@@ -168,6 +181,50 @@
 <body>
 <div class="wrap">
   <header class="masthead">
+    <div class="brand" aria-label="ava tetis" title="ava tetis">
+      <span class="brand-word">a<span class="accent">v</span>a</span>
+      <svg class="brand-emblem" width="42" height="52" viewBox="0 0 52 64" role="img" aria-hidden="true">
+        <defs>
+          <clipPath id="archClip">
+            <path d="M8 64 L8 24 Q8 6 26 6 Q44 6 44 24 L44 64 Z" />
+          </clipPath>
+        </defs>
+        <g clip-path="url(#archClip)">
+          <rect x="0" y="0" width="52" height="64" fill="#1c1714" />
+          <!-- мини-мотив в духе вышивки Tenango -->
+          <g transform="translate(19,22)">
+            <circle cx="-4" cy="0" r="2.8" fill="#d6402f"/><circle cx="4" cy="0" r="2.8" fill="#d6402f"/>
+            <circle cx="0" cy="-4" r="2.8" fill="#d6402f"/><circle cx="0" cy="4" r="2.8" fill="#d6402f"/>
+            <circle cx="0" cy="0" r="2.2" fill="#ffd23f"/>
+          </g>
+          <g transform="translate(34,20)">
+            <circle cx="-3.6" cy="0" r="2.6" fill="#2f7dc4"/><circle cx="3.6" cy="0" r="2.6" fill="#2f7dc4"/>
+            <circle cx="0" cy="-3.6" r="2.6" fill="#2f7dc4"/><circle cx="0" cy="3.6" r="2.6" fill="#2f7dc4"/>
+            <circle cx="0" cy="0" r="2" fill="#ffd23f"/>
+          </g>
+          <g transform="translate(16,37)">
+            <circle cx="-3.6" cy="0" r="2.6" fill="#2f8f4f"/><circle cx="3.6" cy="0" r="2.6" fill="#2f8f4f"/>
+            <circle cx="0" cy="-3.6" r="2.6" fill="#2f8f4f"/><circle cx="0" cy="3.6" r="2.6" fill="#2f8f4f"/>
+            <circle cx="0" cy="0" r="2" fill="#f0e0c0"/>
+          </g>
+          <g transform="translate(35,38)">
+            <circle cx="-3.6" cy="0" r="2.6" fill="#d86fa0"/><circle cx="3.6" cy="0" r="2.6" fill="#d86fa0"/>
+            <circle cx="0" cy="-3.6" r="2.6" fill="#d86fa0"/><circle cx="0" cy="3.6" r="2.6" fill="#d86fa0"/>
+            <circle cx="0" cy="0" r="2" fill="#2f7dc4"/>
+          </g>
+          <g transform="translate(26,51)">
+            <circle cx="-4" cy="0" r="2.8" fill="#e0922e"/><circle cx="4" cy="0" r="2.8" fill="#e0922e"/>
+            <circle cx="0" cy="-4" r="2.8" fill="#e0922e"/><circle cx="0" cy="4" r="2.8" fill="#e0922e"/>
+            <circle cx="0" cy="0" r="2.2" fill="#2f7dc4"/>
+          </g>
+          <ellipse cx="26" cy="14" rx="3.2" ry="1.6" fill="#2f8f4f"/>
+          <ellipse cx="10" cy="50" rx="1.6" ry="3.2" fill="#2f8f4f"/>
+          <ellipse cx="42" cy="50" rx="1.6" ry="3.2" fill="#2f8f4f"/>
+        </g>
+        <path d="M8 64 L8 24 Q8 6 26 6 Q44 6 44 24 L44 64 Z" fill="none" stroke="#8a2d3b" stroke-width="2.6" stroke-linejoin="round"/>
+      </svg>
+      <span class="brand-word">tetis</span>
+    </div>
     <div class="eyebrow">Bitrix24 · Аналитика труда</div>
     <h1>Effective<br>Hours</h1>
     <div class="sub">Эффективные часы и подтверждённая премия</div>
@@ -246,7 +303,7 @@ function fmtHM(seconds) {
 }
 
 function fmtMoney(v) {
-  return (Number(v) || 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₽';
+  return (Number(v) || 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' руб.';
 }
 
 function badgeClass(code) {
