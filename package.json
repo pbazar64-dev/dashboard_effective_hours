@@ -1,0 +1,13 @@
+{
+  "name": "dashboard-effective-hours",
+  "version": "1.0.0",
+  "description": "Bitrix24 effective-hours dashboard (VibeCode)",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

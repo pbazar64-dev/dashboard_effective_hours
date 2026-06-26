@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Дашборд эффективных часов</title>
+<style>
+  :root {
+    --green: #4caf50;
+    --green-dark: #2e7d32;
+    --green-light: #e3f7e3;
+    --red: #d32f2f;
+    --border: #e2e6ea;
+    --muted: #7a828a;
+    --bg: #f4f6f8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: #1f2329;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 14px;
+  }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 24px 20px 60px; }
+  h1 { font-size: 22px; margin: 0 0 20px; }
+
+  .filters {
+    background: #fff; border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px 20px; display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-end;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04);
+  }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: 12px; color: var(--muted); font-weight: 600; }
+  .field input, .field select {
+    height: 38px; border: 1px solid var(--border); border-radius: 8px; padding: 0 10px;
+    font-size: 14px; background: #fff; min-width: 150px;
+  }
+  .field select { min-width: 240px; }
+  .dates { display: flex; gap: 8px; align-items: flex-end; }
+  .apply-btn {
+    height: 38px; padding: 0 22px; background: var(--green); color: #fff; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: background .15s;
+  }
+  .apply-btn:hover { background: #43a047; }
+  .apply-btn:disabled { opacity: .6; cursor: default; }
+
+  .status-line { margin: 16px 2px; color: var(--muted); min-height: 18px; }
+  .status-line.error { color: var(--red); }
+
+  .table-card {
+    background: #fff; border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04); margin-top: 8px;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 11px 14px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th {
+    background: #fafbfc; font-size: 12px; color: #4a525a; font-weight: 700; cursor: pointer;
+    user-select: none; white-space: nowrap; position: sticky; top: 0;
+  }
+  th:hover { background: #f0f2f5; }
+  th .arrow { color: var(--green); margin-left: 4px; font-size: 11px; }
+  th.num, td.num { text-align: right; white-space: nowrap; }
+  tr.completed td { background: var(--green-light); }
+  td a { color: #2563eb; text-decoration: none; }
+  td a:hover { text-decoration: underline; }
+  .spent-over { color: var(--red); font-weight: 600; }
+  .spent-under { color: var(--green-dark); font-weight: 600; }
+  .badge {
+    display: inline-block; padding: 3px 9px; border-radius: 20px; font-size: 12px; font-weight: 600;
+    background: #eef1f4; color: #4a525a;
+  }
+  .badge.done { background: #d6f0d6; color: var(--green-dark); }
+  .badge.progress { background: #dbeafe; color: #1e40af; }
+  .badge.wait { background: #fff3d6; color: #92660a; }
+  .badge.deferred { background: #ececec; color: #666; }
+  .empty { padding: 40px; text-align: center; color: var(--muted); }
+
+  .cards { display: flex; gap: 18px; margin-top: 22px; flex-wrap: wrap; }
+  .card {
+    flex: 1 1 240px; background: #fff; border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px 22px; box-shadow: 0 1px 3px rgba(0,0,0,.04);
+  }
+  .card .card-title { font-size: 13px; color: var(--muted); font-weight: 600; margin-bottom: 10px; }
+  .card .card-value { font-size: 26px; font-weight: 700; color: var(--green-dark); }
+  .card.bonus .card-value { color: #1f2329; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Дашборд эффективных часов</h1>
+
+  <div class="filters">
+    <div class="field dates">
+      <div class="field">
+        <label>Дата от</label>
+        <input type="date" id="dateFrom" />
+      </div>
+      <div class="field">
+        <label>Дата до</label>
+        <input type="date" id="dateTo" />
+      </div>
+    </div>
+    <div class="field">
+      <label>Сотрудник</label>
+      <select id="employee"><option value="">Загрузка…</option></select>
+    </div>
+    <div class="field">
+      <label>Ставка часа (руб.)</label>
+      <input type="number" id="rate" min="0" step="1" value="0" />
+    </div>
+    <button class="apply-btn" id="applyBtn">Применить</button>
+  </div>
+
+  <div class="status-line" id="status"></div>
+
+  <div class="table-card" id="tableCard" style="display:none">
+    <table>
+      <thead>
+        <tr id="headRow"></tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+
+  <div class="cards" id="cards" style="display:none">
+    <div class="card">
+      <div class="card-title">Эффективные часы</div>
+      <div class="card-value" id="effHours">—</div>
+    </div>
+    <div class="card bonus">
+      <div class="card-title">Подтвержденная премия</div>
+      <div class="card-value" id="confBonus">—</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const COLUMNS = [
+  { key: 'projectName',    title: 'Проект',                  type: 'text' },
+  { key: 'title',          title: 'Задача',                  type: 'text' },
+  { key: 'status',         title: 'Статус задачи',           type: 'text' },
+  { key: 'spentSeconds',   title: 'Потраченные часы',        type: 'num'  },
+  { key: 'plannedSeconds', title: 'Плановые часы на задачу', type: 'num'  },
+  { key: 'bonus',          title: 'Премия',                  type: 'num'  },
+];
+
+let rowsData = [];
+let sortState = { key: null, dir: 1 };
+const statusEl = document.getElementById('status');
+
+function setStatus(msg, isError) {
+  statusEl.textContent = msg || '';
+  statusEl.className = 'status-line' + (isError ? ' error' : '');
+}
+
+function fmtHM(seconds) {
+  const s = Math.max(0, Math.round(Number(seconds) || 0));
+  const h = Math.floor(s / 3600);
+  const m = Math.round((s % 3600) / 60);
+  return h + ' ч ' + m + ' мин';
+}
+
+function fmtMoney(v) {
+  return (Number(v) || 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₽';
+}
+
+function badgeClass(code) {
+  if (code === 5) return 'badge done';
+  if (code === 3 || code === 4) return 'badge progress';
+  if (code === 6 || code === 7) return 'badge deferred';
+  return 'badge wait';
+}
+
+function renderHead() {
+  const tr = document.getElementById('headRow');
+  tr.innerHTML = '';
+  for (const col of COLUMNS) {
+    const th = document.createElement('th');
+    if (col.type === 'num') th.className = 'num';
+    let arrow = '';
+    if (sortState.key === col.key) arrow = sortState.dir === 1 ? '▲' : '▼';
+    th.innerHTML = col.title + (arrow ? ' <span class="arrow">' + arrow + '</span>' : '');
+    th.onclick = () => {
+      if (sortState.key === col.key) sortState.dir = -sortState.dir;
+      else { sortState.key = col.key; sortState.dir = 1; }
+      renderHead();
+      renderBody();
+    };
+    tr.appendChild(th);
+  }
+}
+
+function sortedRows() {
+  const rows = rowsData.slice();
+  if (!sortState.key) return rows;
+  const col = COLUMNS.find((c) => c.key === sortState.key);
+  rows.sort((a, b) => {
+    let r;
+    if (col.type === 'num') {
+      r = (Number(a[col.key]) || 0) - (Number(b[col.key]) || 0);
+    } else {
+      r = String(a[col.key] || '').localeCompare(String(b[col.key] || ''), 'ru', { sensitivity: 'base' });
+    }
+    return r * sortState.dir;
+  });
+  return rows;
+}
+
+function renderBody() {
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+  const rows = sortedRows();
+  if (rows.length === 0) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td class="empty" colspan="' + COLUMNS.length + '">Нет задач по выбранным фильтрам</td>';
+    tbody.appendChild(tr);
+    return;
+  }
+  for (const row of rows) {
+    const tr = document.createElement('tr');
+    if (row.isCompleted) tr.className = 'completed';
+
+    // Проект
+    const tdProj = document.createElement('td');
+    if (row.projectUrl) {
+      const a = document.createElement('a');
+      a.href = row.projectUrl; a.target = '_blank'; a.rel = 'noopener';
+      a.textContent = row.projectName;
+      tdProj.appendChild(a);
+    } else tdProj.textContent = row.projectName;
+    tr.appendChild(tdProj);
+
+    // Задача
+    const tdTask = document.createElement('td');
+    if (row.taskUrl) {
+      const a = document.createElement('a');
+      a.href = row.taskUrl; a.target = '_blank'; a.rel = 'noopener';
+      a.textContent = row.title;
+      tdTask.appendChild(a);
+    } else tdTask.textContent = row.title;
+    tr.appendChild(tdTask);
+
+    // Статус
+    const tdStatus = document.createElement('td');
+    const span = document.createElement('span');
+    span.className = badgeClass(row.statusCode);
+    span.textContent = row.status;
+    tdStatus.appendChild(span);
+    tr.appendChild(tdStatus);
+
+    // Потраченные
+    const tdSpent = document.createElement('td');
+    tdSpent.className = 'num';
+    if (row.spentOver) tdSpent.classList.add('spent-over');
+    else if (row.spentUnder) tdSpent.classList.add('spent-under');
+    tdSpent.textContent = fmtHM(row.spentSeconds);
+    tr.appendChild(tdSpent);
+
+    // Плановые
+    const tdPlan = document.createElement('td');
+    tdPlan.className = 'num';
+    tdPlan.textContent = fmtHM(row.plannedSeconds);
+    tr.appendChild(tdPlan);
+
+    // Премия
+    const tdBonus = document.createElement('td');
+    tdBonus.className = 'num';
+    tdBonus.textContent = fmtMoney(row.bonus);
+    tr.appendChild(tdBonus);
+
+    tbody.appendChild(tr);
+  }
+}
+
+function renderSummary(summary) {
+  document.getElementById('effHours').textContent = fmtHM(summary.effectiveSeconds);
+  document.getElementById('confBonus').textContent = fmtMoney(summary.confirmedBonus);
+}
+
+function redirectToAuth(url) {
+  if (url) {
+    setStatus('Требуется авторизация в Битрикс24…');
+    (window.top || window).location.href = url;
+  } else {
+    setStatus('Нет доступа: не настроена авторизация приложения.', true);
+  }
+}
+
+async function loadUsers() {
+  const sel = document.getElementById('employee');
+  const res = await fetch('/api/users');
+  if (res.status === 401) {
+    const j = await res.json().catch(() => ({}));
+    redirectToAuth(j.authorizeUrl);
+    return;
+  }
+  const j = await res.json();
+  if (!j.users) { sel.innerHTML = '<option value="">— нет данных —</option>'; return; }
+  sel.innerHTML = '<option value="">— выберите сотрудника —</option>';
+  for (const u of j.users) {
+    const opt = document.createElement('option');
+    opt.value = u.id;
+    opt.textContent = u.label + (u.position ? ' — ' + u.position : '');
+    sel.appendChild(opt);
+  }
+}
+
+async function apply() {
+  const dateFrom = document.getElementById('dateFrom').value;
+  const dateTo = document.getElementById('dateTo').value;
+  const userId = document.getElementById('employee').value;
+  const rate = document.getElementById('rate').value;
+
+  if (!userId) { setStatus('Выберите сотрудника', true); return; }
+  if (!dateFrom || !dateTo) { setStatus('Укажите период (от/до)', true); return; }
+  if (dateFrom > dateTo) { setStatus('Дата «от» позже даты «до»', true); return; }
+
+  const btn = document.getElementById('applyBtn');
+  btn.disabled = true;
+  setStatus('Загрузка данных…');
+  try {
+    const res = await fetch('/api/dashboard', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dateFrom, dateTo, userId, rate: Number(rate) || 0 }),
+    });
+    if (res.status === 401) {
+      const j = await res.json().catch(() => ({}));
+      redirectToAuth(j.authorizeUrl);
+      return;
+    }
+    const j = await res.json();
+    if (!res.ok) { setStatus(j.error || 'Ошибка загрузки', true); return; }
+
+    rowsData = j.rows || [];
+    renderHead();
+    renderBody();
+    renderSummary(j.summary || { effectiveSeconds: 0, confirmedBonus: 0 });
+    document.getElementById('tableCard').style.display = '';
+    document.getElementById('cards').style.display = 'flex';
+
+    const note = j.meta && j.meta.periodIncludesToday
+      ? 'Период включает сегодняшний день: показаны незавершённые задачи и завершённые в периоде.'
+      : 'Период в прошлом: показаны только задачи, завершённые в выбранном периоде.';
+    setStatus('Найдено задач: ' + rowsData.length + '. ' + note);
+  } catch (e) {
+    setStatus('Ошибка: ' + e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function initDefaults() {
+  // период по умолчанию — текущий месяц
+  const now = new Date();
+  const first = new Date(now.getFullYear(), now.getMonth(), 1);
+  const iso = (d) => d.toISOString().slice(0, 10);
+  document.getElementById('dateFrom').value = iso(first);
+  document.getElementById('dateTo').value = iso(now);
+}
+
+document.getElementById('applyBtn').addEventListener('click', apply);
+
+(async function init() {
+  initDefaults();
+  renderHead();
+  try {
+    const meRes = await fetch('/api/me');
+    const me = await meRes.json();
+    if (!me.authenticated) { redirectToAuth(me.authorizeUrl); return; }
+    await loadUsers();
+    setStatus('Выберите сотрудника и период, затем нажмите «Применить».');
+  } catch (e) {
+    setStatus('Ошибка инициализации: ' + e.message, true);
+  }
+})();
+</script>
+</body>
+</html>
