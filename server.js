@@ -456,6 +456,11 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`Dashboard listening on :${PORT}`);
-});
+if (require.main === module) {
+  server.listen(PORT, () => {
+    console.log(`Dashboard listening on :${PORT}`);
+  });
+}
+
+// экспорт чистых функций для тестов
+module.exports = { statusLabel, portalToday, computeDashboard, __setFetch: (f) => { globalThis.fetch = f; } };
