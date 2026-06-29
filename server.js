@@ -40,6 +40,33 @@ setInterval(cleanupMaps, 5 * 60 * 1000).unref();
 
 // кэш домена портала (для построения ссылок)
 let portalDomainCache = null;
+// кэш названий рабочих групп (проектов): groupId -> name
+const groupNameCache = new Map();
+
+// дозабор названий групп, которых нет в общем списке (например, архивные/закрытые)
+async function resolveGroupNames(token, groupIds, into) {
+  const need = [];
+  for (const gid of groupIds) {
+    if (!gid || gid === '0') continue;
+    if (into.has(gid) && into.get(gid)) continue;
+    if (groupNameCache.has(gid)) { into.set(gid, groupNameCache.get(gid)); continue; }
+    need.push(gid);
+  }
+  let i = 0;
+  async function worker() {
+    while (i < need.length) {
+      const gid = need[i++];
+      try {
+        const { json } = await vibe('GET', '/workgroups/' + encodeURIComponent(gid), token);
+        const d = json && json.data;
+        const name = d && (d.name || d.NAME);
+        if (name) { into.set(gid, name); groupNameCache.set(gid, name); }
+      } catch (e) { /* оставим запасной вариант */ }
+    }
+  }
+  const pool = Math.min(5, need.length);
+  await Promise.all(Array.from({ length: pool }, worker));
+}
 
 // ---- helpers ---------------------------------------------------------------
 function parseCookies(req) {
@@ -243,7 +270,11 @@ async function computeDashboard(token, params) {
     gq.set('limit', '500');
     const gr = await vibe('GET', '/workgroups?' + gq.toString(), token);
     if (gr.json && Array.isArray(gr.json.data)) {
-      for (const g of gr.json.data) groupsMap.set(String(g.id), g.name || '');
+      for (const g of gr.json.data) {
+        const gid = String(g.id || g.ID || '');
+        const name = g.name || g.NAME || '';
+        if (gid && name) { groupsMap.set(gid, name); groupNameCache.set(gid, name); }
+      }
     }
   } catch (e) { /* ignore */ }
 
@@ -272,8 +303,8 @@ async function computeDashboard(token, params) {
   const portal = await getPortalDomain(token);
   const portalUrl = portal ? 'https://' + portal : '';
 
-  // 4) фильтрация и сборка строк
-  const rows = [];
+  // 4) первый проход — отбор задач по правилам
+  const included = [];
   for (const t of allTasks) {
     // защита: учёт времени включён
     const att = t.allowTimeTracking !== undefined ? t.allowTimeTracking : t.ALLOW_TIME_TRACKING;
@@ -292,7 +323,16 @@ async function computeDashboard(token, params) {
       ? (!isCompleted || closedInRange)
       : closedInRange;
     if (!include) continue;
+    included.push({ t, statusNum, isCompleted });
+  }
 
+  // дозабираем названия проектов, которых не было в общем списке (архивные и т.п.)
+  const neededGroupIds = new Set(included.map(({ t }) => String(t.groupId || '0')));
+  await resolveGroupNames(token, neededGroupIds, groupsMap);
+
+  // 5) второй проход — сборка строк
+  const rows = [];
+  for (const { t, statusNum, isCompleted } of included) {
     const groupId = String(t.groupId || '0');
     const plannedSeconds = num(t.timeEstimate);
     const spentSeconds = spentByTask.has(String(t.id))
@@ -327,7 +367,7 @@ async function computeDashboard(token, params) {
     });
   }
 
-  // 5) итоговые карточки — только завершённые задачи
+  // 6) итоговые карточки — только завершённые задачи
   let effectiveSeconds = 0;
   let confirmedBonus = 0;
   for (const r of rows) {

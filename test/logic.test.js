@@ -42,11 +42,15 @@ const tasks = {
       closedDate: closedInRange, timeEstimate: '0', timeSpentInLogs: '1800', allowTimeTracking: 'Y' },
     { id: '105', title: 'No time tracking', status: '3', responsibleId: '7', groupId: '147',
       closedDate: null, timeEstimate: '3600', timeSpentInLogs: '0', allowTimeTracking: 'N' },
+    { id: '106', title: 'Archived project task', status: '3', responsibleId: '7', groupId: '13',
+      closedDate: null, timeEstimate: '3600', timeSpentInLogs: '900', allowTimeTracking: 'Y' },
   ],
-  meta: { total: 5, hasMore: false },
+  meta: { total: 6, hasMore: false },
 };
 
+// общий список НЕ содержит группу 13 (например, архивную) — её имя добираем по ID
 const workgroups = { success: true, data: [{ id: '147', name: 'Юмедика' }] };
+const group13 = { success: true, data: { id: '13', name: 'Прометей' } };
 // task-time: executor (user 7) logged 90 min on task 102, 30 min on 101
 const taskTime = {
   success: true,
@@ -60,6 +64,7 @@ const me = { success: true, data: { portal: 'avrika.bitrix24.ru' } };
 
 mod.__setFetch(makeFetch([
   ['/tasks?', tasks],
+  ['/workgroups/13', group13],
   ['/workgroups?', workgroups],
   ['/task-time?', taskTime],
   ['/me', me],
@@ -73,13 +78,17 @@ mod.__setFetch(makeFetch([
   // period includes today -> active(101) shown, done-in-range(102) shown, deferred(104) shown,
   // done-out-of-range(103) excluded (not completed? it IS completed and not in range -> excluded),
   // no-time-tracking(105) excluded by guard.
-  assert.deepStrictEqual(res.rows.map(r => r.id).sort(), ['101', '102', '104'], 'wrong inclusion set');
+  assert.deepStrictEqual(res.rows.map(r => r.id).sort(), ['101', '102', '104', '106'], 'wrong inclusion set');
   assert.strictEqual(res.meta.periodIncludesToday, true);
 
   // project name + url
   assert.strictEqual(byId['101'].projectName, 'Юмедика');
   assert.ok(byId['101'].projectUrl.includes('/workgroups/group/147/'));
   assert.ok(byId['101'].taskUrl.includes('/tasks/task/view/101/'));
+
+  // имя архивного проекта (нет в общем списке) добрано по ID -> "Прометей", не "Проект #13"
+  assert.strictEqual(byId['106'].projectName, 'Прометей');
+  assert.ok(byId['106'].projectUrl.includes('/workgroups/group/13/'));
 
   // status labels
   assert.strictEqual(byId['101'].status, 'Выполняется');
