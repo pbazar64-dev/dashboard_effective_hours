@@ -224,7 +224,7 @@ async function computeDashboard(token, params) {
   const qp = new URLSearchParams();
   qp.set('filter[responsibleId]', userId);
   qp.set('filter[allowTimeTracking]', 'Y');
-  for (const s of select) qp.append('select', s);
+  qp.set('select', select.join(',')); // comma-форма (повторяющийся ?select= ломает выборку)
   qp.set('order[id]', 'desc');
   qp.set('limit', '5000');
 
@@ -239,7 +239,7 @@ async function computeDashboard(token, params) {
   const groupsMap = new Map();
   try {
     const gq = new URLSearchParams();
-    gq.append('select', 'id'); gq.append('select', 'name');
+    gq.set('select', 'id,name');
     gq.set('limit', '500');
     const gr = await vibe('GET', '/workgroups?' + gq.toString(), token);
     if (gr.json && Array.isArray(gr.json.data)) {
@@ -374,30 +374,17 @@ async function handleApi(req, res, url, token) {
   if (!token) return sendJson(res, 401, { error: 'unauthorized', authorizeUrl: REDIRECT_URI ? buildAuthorizeUrl() : null });
 
   if (p === '/api/users') {
-    // запрос максимально простой — без order/filter, которые B24 может отклонить;
-    // активность и сортировку делаем на стороне сервера приложения
-    const q = new URLSearchParams();
-    for (const f of ['id', 'name', 'lastName', 'secondName', 'workPosition', 'email', 'login', 'active']) {
-      q.append('select', f);
-    }
-    q.set('filter[ACTIVE]', 'Y');
-    q.set('limit', '1000');
-    let { status, json } = await vibe('GET', '/users?' + q.toString(), token);
-    // если фильтр по ACTIVE не поддержан и вернулась ошибка — повторяем без фильтра
-    if (json && json.success === false) {
-      const q2 = new URLSearchParams();
-      for (const f of ['id', 'name', 'lastName', 'secondName', 'workPosition', 'email', 'login', 'active']) {
-        q2.append('select', f);
-      }
-      q2.set('limit', '1000');
-      ({ status, json } = await vibe('GET', '/users?' + q2.toString(), token));
-    }
+    // НЕ передаём select (повторяющийся ?select=a&select=b ломает выборку полей в
+    // обёртке) и не передаём order — берём полные записи, фильтруем/сортируем тут
+    const { status, json } = await vibe('GET', '/users?limit=1000', token);
     if (status === 401) return sendJson(res, 401, { error: 'unauthorized', authorizeUrl: buildAuthorizeUrl() });
     if (!json || json.success === false) return sendJson(res, 502, { error: json && json.error });
 
-    const pick = (u, camel, snake) => {
-      const v = u[camel] !== undefined ? u[camel] : u[snake];
-      return (v === undefined || v === null) ? '' : String(v).trim();
+    const pick = (u, ...keys) => {
+      for (const k of keys) {
+        if (u[k] !== undefined && u[k] !== null && String(u[k]).trim() !== '') return String(u[k]).trim();
+      }
+      return '';
     };
     const users = (json.data || [])
       .filter((u) => {
@@ -405,13 +392,14 @@ async function handleApi(req, res, url, token) {
         return a === undefined || a === null || a === true || a === 'Y' || a === 1 || a === '1';
       })
       .map((u) => {
+        const id = pick(u, 'id', 'ID', 'iD');
         const first = pick(u, 'name', 'NAME');
         const last = pick(u, 'lastName', 'LAST_NAME');
         const second = pick(u, 'secondName', 'SECOND_NAME');
         // «Фамилия Имя» — имена и фамилии сотрудников; запасные варианты, если ФИО пустые
         let label = [last, first].filter(Boolean).join(' ').trim();
-        if (!label) label = second || pick(u, 'email', 'EMAIL') || pick(u, 'login', 'LOGIN') || ('ID ' + u.id);
-        return { id: String(u.id), label, position: pick(u, 'workPosition', 'WORK_POSITION') };
+        if (!label) label = second || pick(u, 'email', 'EMAIL') || pick(u, 'login', 'LOGIN') || (id ? 'ID ' + id : '');
+        return { id, label, position: pick(u, 'workPosition', 'WORK_POSITION') };
       })
       .filter((u) => u.id && u.label);
     users.sort((a, b) => a.label.localeCompare(b.label, 'ru'));
