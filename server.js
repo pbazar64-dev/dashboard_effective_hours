@@ -374,19 +374,46 @@ async function handleApi(req, res, url, token) {
   if (!token) return sendJson(res, 401, { error: 'unauthorized', authorizeUrl: REDIRECT_URI ? buildAuthorizeUrl() : null });
 
   if (p === '/api/users') {
+    // запрос максимально простой — без order/filter, которые B24 может отклонить;
+    // активность и сортировку делаем на стороне сервера приложения
     const q = new URLSearchParams();
-    q.set('filter[active]', 'true');
-    for (const f of ['id', 'name', 'lastName', 'secondName', 'workPosition']) q.append('select', f);
+    for (const f of ['id', 'name', 'lastName', 'secondName', 'workPosition', 'email', 'login', 'active']) {
+      q.append('select', f);
+    }
+    q.set('filter[ACTIVE]', 'Y');
     q.set('limit', '1000');
-    q.set('order[lastName]', 'asc');
-    const { status, json } = await vibe('GET', '/users?' + q.toString(), token);
+    let { status, json } = await vibe('GET', '/users?' + q.toString(), token);
+    // если фильтр по ACTIVE не поддержан и вернулась ошибка — повторяем без фильтра
+    if (json && json.success === false) {
+      const q2 = new URLSearchParams();
+      for (const f of ['id', 'name', 'lastName', 'secondName', 'workPosition', 'email', 'login', 'active']) {
+        q2.append('select', f);
+      }
+      q2.set('limit', '1000');
+      ({ status, json } = await vibe('GET', '/users?' + q2.toString(), token));
+    }
     if (status === 401) return sendJson(res, 401, { error: 'unauthorized', authorizeUrl: buildAuthorizeUrl() });
     if (!json || json.success === false) return sendJson(res, 502, { error: json && json.error });
-    const users = (json.data || []).map((u) => {
-      const label = [u.lastName, u.name, u.secondName].filter(Boolean).join(' ').trim()
-        || u.name || ('ID ' + u.id);
-      return { id: String(u.id), label, position: u.workPosition || '' };
-    }).filter((u) => u.label);
+
+    const pick = (u, camel, snake) => {
+      const v = u[camel] !== undefined ? u[camel] : u[snake];
+      return (v === undefined || v === null) ? '' : String(v).trim();
+    };
+    const users = (json.data || [])
+      .filter((u) => {
+        const a = u.active !== undefined ? u.active : u.ACTIVE;
+        return a === undefined || a === null || a === true || a === 'Y' || a === 1 || a === '1';
+      })
+      .map((u) => {
+        const first = pick(u, 'name', 'NAME');
+        const last = pick(u, 'lastName', 'LAST_NAME');
+        const second = pick(u, 'secondName', 'SECOND_NAME');
+        // «Фамилия Имя» — имена и фамилии сотрудников; запасные варианты, если ФИО пустые
+        let label = [last, first].filter(Boolean).join(' ').trim();
+        if (!label) label = second || pick(u, 'email', 'EMAIL') || pick(u, 'login', 'LOGIN') || ('ID ' + u.id);
+        return { id: String(u.id), label, position: pick(u, 'workPosition', 'WORK_POSITION') };
+      })
+      .filter((u) => u.id && u.label);
     users.sort((a, b) => a.label.localeCompare(b.label, 'ru'));
     return sendJson(res, 200, { users });
   }
@@ -468,4 +495,4 @@ if (require.main === module) {
 }
 
 // экспорт чистых функций для тестов
-module.exports = { statusLabel, portalToday, computeDashboard, __setFetch: (f) => { globalThis.fetch = f; } };
+module.exports = { server, statusLabel, portalToday, computeDashboard, __setFetch: (f) => { globalThis.fetch = f; } };
