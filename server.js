@@ -143,13 +143,28 @@ async function vibe(method, pathAndQuery, token, body) {
 }
 
 async function getPortalDomain(token) {
-  if (portalDomainCache) return portalDomainCache;
+  const v = await getViewer(token);
+  return v.portal;
+}
+
+// домен портала + ID текущего (просматривающего) пользователя — для ссылок
+const viewerCache = new Map(); // token -> { portal, userId, exp }
+async function getViewer(token) {
+  const cached = viewerCache.get(token);
+  if (cached && cached.exp > Date.now()) return cached;
+  let portal = portalDomainCache;
+  let userId = null;
   try {
     const { json } = await vibe('GET', '/me', token);
-    const portal = json && json.data && json.data.portal;
-    if (portal) { portalDomainCache = portal; return portal; }
+    if (json && json.data) {
+      if (json.data.portal) { portal = json.data.portal; portalDomainCache = portal; }
+      const cu = json.data.currentUser;
+      if (cu && cu.bitrixUserId) userId = String(cu.bitrixUserId);
+    }
   } catch (e) { /* ignore */ }
-  return null;
+  const v = { portal: portal || null, userId, exp: Date.now() + 60 * 60 * 1000 };
+  viewerCache.set(token, v);
+  return v;
 }
 
 // ---- OAuth -----------------------------------------------------------------
@@ -300,8 +315,12 @@ async function computeDashboard(token, params) {
     }
   } catch (e) { /* ignore, упадём на timeSpentInLogs */ }
 
-  const portal = await getPortalDomain(token);
+  const viewer = await getViewer(token);
+  const portal = viewer.portal;
   const portalUrl = portal ? 'https://' + portal : '';
+  // ссылка на задачу открывается в кабинете текущего пользователя (у него есть доступ),
+  // а не ответственного — иначе Битрикс24 может не пустить на чужой кабинет
+  const contextUserId = viewer.userId || null;
 
   // 4) первый проход — отбор задач по правилам
   const included = [];
@@ -344,11 +363,12 @@ async function computeDashboard(token, params) {
     const bonus = rate * hoursForBonus;
 
     const respId = String(t.responsibleId || userId);
+    const ctxUser = contextUserId || respId;
     const projectName = groupsMap.get(groupId) || (groupId !== '0' ? 'Проект #' + groupId : 'Без проекта');
     const projectUrl = (portalUrl && groupId !== '0')
       ? `${portalUrl}/workgroups/group/${groupId}/` : '';
     const taskUrl = portalUrl
-      ? `${portalUrl}/company/personal/user/${respId}/tasks/task/view/${t.id}/` : '';
+      ? `${portalUrl}/company/personal/user/${ctxUser}/tasks/task/view/${t.id}/` : '';
 
     rows.push({
       id: String(t.id),

@@ -60,7 +60,7 @@ const taskTime = {
   ],
   meta: { total: 2, hasMore: false },
 };
-const me = { success: true, data: { portal: 'avrika.bitrix24.ru' } };
+const me = { success: true, data: { portal: 'avrika.bitrix24.ru', currentUser: { bitrixUserId: '99' } } };
 
 mod.__setFetch(makeFetch([
   ['/tasks?', tasks],
@@ -84,7 +84,9 @@ mod.__setFetch(makeFetch([
   // project name + url
   assert.strictEqual(byId['101'].projectName, 'Юмедика');
   assert.ok(byId['101'].projectUrl.includes('/workgroups/group/147/'));
-  assert.ok(byId['101'].taskUrl.includes('/tasks/task/view/101/'));
+  // ссылка на задачу — в контексте текущего пользователя (id 99), ведёт на саму задачу
+  assert.strictEqual(byId['101'].taskUrl, 'https://avrika.bitrix24.ru/company/personal/user/99/tasks/task/view/101/');
+  assert.ok(byId['102'].taskUrl.includes('/tasks/task/view/102/'));
 
   // имя архивного проекта (нет в общем списке) добрано по ID -> "Прометей", не "Проект #13"
   assert.strictEqual(byId['106'].projectName, 'Прометей');
