@@ -258,24 +258,60 @@ async function computeDashboard(token, params) {
   const today = portalToday();
   const periodIncludesToday = dateFrom <= today && today <= dateTo;
 
-  // 1) задачи сотрудника с включённым учётом времени
+  // 1) задачи сотрудника с включённым учётом времени.
+  //    Забираем ЦЕЛЕВЫМИ запросами на стороне Битрикс24 (по closedDate и по статусу),
+  //    а не «все задачи сотрудника + фильтр в коде»: у активного исполнителя задач
+  //    может быть больше, чем помещается в одну выборку (order=id desc, limit), и старые
+  //    (с меньшим id) задачи, закрытые в выбранном периоде, просто не попадали в окно.
   const select = [
     'id', 'title', 'status', 'responsibleId', 'groupId',
     'closedDate', 'timeEstimate', 'timeSpentInLogs', 'allowTimeTracking',
-  ];
-  const qp = new URLSearchParams();
-  qp.set('filter[responsibleId]', userId);
-  qp.set('filter[allowTimeTracking]', 'Y');
-  qp.set('select', select.join(',')); // comma-форма (повторяющийся ?select= ломает выборку)
-  qp.set('order[id]', 'desc');
-  qp.set('limit', '5000');
+  ].join(',');
 
-  const tasksResp = await vibe('GET', '/tasks?' + qp.toString(), token);
-  if (tasksResp.status === 401) throw httpError(401, 'Сессия истекла');
-  if (!tasksResp.json || tasksResp.json.success === false) {
-    throw httpError(502, 'Ошибка получения задач: ' + JSON.stringify(tasksResp.json && tasksResp.json.error));
+  async function fetchTasks(extraParams) {
+    const p = new URLSearchParams();
+    p.set('filter[responsibleId]', userId);
+    p.set('filter[allowTimeTracking]', 'Y');
+    for (const [k, v] of extraParams) p.append(k, v);
+    p.set('select', select);
+    p.set('order[id]', 'desc');
+    p.set('limit', '5000');
+    const r = await vibe('GET', '/tasks?' + p.toString(), token);
+    if (r.status === 401) throw httpError(401, 'Сессия истекла');
+    if (!r.json || r.json.success === false) {
+      throw httpError(502, 'Ошибка получения задач: ' + JSON.stringify(r.json && r.json.error));
+    }
+    return Array.isArray(r.json.data) ? r.json.data : [];
   }
-  const allTasks = Array.isArray(tasksResp.json.data) ? tasksResp.json.data : [];
+
+  // Ведро 1 — задачи, ЗАКРЫТЫЕ в выбранном периоде (фильтр по closedDate). Нужно всегда.
+  const closedBucket = await fetchTasks([
+    ['filter[>=closedDate]', dateFrom + 'T00:00:00'],
+    ['filter[<=closedDate]', dateTo + 'T23:59:59'],
+  ]);
+  // Ведро 2 — НЕзавершённые задачи (REAL_STATUS ∈ {1,2,3,4,6}, т.е. не «Завершена»).
+  //    Нужно только если выбранный период включает сегодняшний день.
+  let activeBucket = [];
+  if (periodIncludesToday) {
+    activeBucket = await fetchTasks([
+      ['filter[REAL_STATUS][]', '1'], ['filter[REAL_STATUS][]', '2'],
+      ['filter[REAL_STATUS][]', '3'], ['filter[REAL_STATUS][]', '4'],
+      ['filter[REAL_STATUS][]', '6'],
+    ]);
+  }
+
+  // объединяем задачи, помечая, из какого ведра они пришли
+  const taskMap = new Map();
+  const markBucket = (arr, key) => {
+    for (const t of arr) {
+      const id = String(t.id != null ? t.id : t.ID);
+      if (!id) continue;
+      const rec = taskMap.get(id) || { t, closed: false, active: false };
+      rec.t = t; rec[key] = true; taskMap.set(id, rec);
+    }
+  };
+  markBucket(closedBucket, 'closed');
+  markBucket(activeBucket, 'active');
 
   // 2) карта названий рабочих групп (проектов)
   const groupsMap = new Map();
@@ -322,10 +358,12 @@ async function computeDashboard(token, params) {
   // а не ответственного — иначе Битрикс24 может не пустить на чужой кабинет
   const contextUserId = viewer.userId || null;
 
-  // 4) первый проход — отбор задач по правилам
+  // 4) первый проход — отбор задач (диапазон дат и статус уже применены запросами;
+  //    здесь — только страховки на случай, если серверный фильтр был проигнорирован)
   const included = [];
-  for (const t of allTasks) {
-    // защита: учёт времени включён
+  for (const rec of taskMap.values()) {
+    const t = rec.t;
+    // учёт времени включён
     const att = t.allowTimeTracking !== undefined ? t.allowTimeTracking : t.ALLOW_TIME_TRACKING;
     if (att !== undefined && att !== null) {
       const enabled = att === 'Y' || att === true || att === 1 || att === '1';
@@ -334,14 +372,19 @@ async function computeDashboard(token, params) {
 
     const statusNum = Number(t.status);
     const isCompleted = statusNum === 5;
-    const closedRaw = t.closedDate || t.CLOSED_DATE || null;
-    const closedDay = closedRaw ? String(closedRaw).slice(0, 10) : null;
-    const closedInRange = closedDay && closedDay >= dateFrom && closedDay <= dateTo;
 
-    const include = periodIncludesToday
-      ? (!isCompleted || closedInRange)
-      : closedInRange;
-    if (!include) continue;
+    // задача закрыта в периоде: доверяем серверному фильтру closedDate, но если поле
+    // closedDate вернулось — перепроверяем диапазон (страховка от игнора фильтра)
+    let closedOk = rec.closed;
+    if (closedOk) {
+      const closedRaw = t.closedDate || t.CLOSED_DATE || null;
+      const closedDay = closedRaw ? String(closedRaw).slice(0, 10) : null;
+      if (closedDay) closedOk = closedDay >= dateFrom && closedDay <= dateTo;
+    }
+    // из «активного» ведра берём только реально незавершённые (страховка от игнора REAL_STATUS)
+    const activeOk = rec.active && !isCompleted;
+
+    if (!closedOk && !activeOk) continue;
     included.push({ t, statusNum, isCompleted });
   }
 
@@ -464,6 +507,19 @@ async function handleApi(req, res, url, token) {
       .filter((u) => u.id && u.label);
     users.sort((a, b) => a.label.localeCompare(b.label, 'ru'));
     return sendJson(res, 200, { users });
+  }
+
+  // Диагностика: сырые поля конкретных задач по id (для проверки closedDate/статуса/учёта
+  // времени). Пример: /api/debug/tasks?ids=1893,1999,2077
+  if (p === '/api/debug/tasks') {
+    const ids = (url.searchParams.get('ids') || '').split(',').map((s) => s.trim()).filter(Boolean).slice(0, 60);
+    const sel = 'id,title,status,responsibleId,groupId,closedDate,timeEstimate,timeSpentInLogs,allowTimeTracking';
+    const out = [];
+    for (const id of ids) {
+      const r = await vibe('GET', '/tasks/' + encodeURIComponent(id) + '?select=' + sel, token);
+      out.push({ id, httpStatus: r.status, task: (r.json && r.json.data) || null, error: (r.json && r.json.error) || null });
+    }
+    return sendJson(res, 200, { today: portalToday(), tasks: out });
   }
 
   if (p === '/api/dashboard' && req.method === 'POST') {
