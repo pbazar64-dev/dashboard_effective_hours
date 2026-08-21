@@ -271,7 +271,11 @@ async function computeDashboard(token, params) {
   async function fetchTasks(extraParams) {
     const p = new URLSearchParams();
     p.set('filter[responsibleId]', userId);
-    p.set('filter[allowTimeTracking]', 'Y');
+    // Примечание: НЕ фильтруем по allowTimeTracking. На этом портале флаг «Учёт времени»
+    // (ALLOW_TIME_TRACKING) выключен даже у реальных задач с учётом времени — он по
+    // умолчанию false при создании задач через API (напр. при запуске проекта из сметы),
+    // хотя плановое/затраченное время у них проставлено. Фильтр по флагу отсекал такие
+    // задачи (напр. 1893, 2097, 2099). Отбор идёт по ответственному + датам/статусу.
     for (const [k, v] of extraParams) p.append(k, v);
     p.set('select', select);
     p.set('order[id]', 'desc');
@@ -358,30 +362,18 @@ async function computeDashboard(token, params) {
   // а не ответственного — иначе Битрикс24 может не пустить на чужой кабинет
   const contextUserId = viewer.userId || null;
 
-  // 4) первый проход — отбор задач (диапазон дат и статус уже применены запросами;
-  //    здесь — только страховки на случай, если серверный фильтр был проигнорирован)
+  // 4) первый проход — отбор задач (диапазон дат и статус уже применены запросами).
   const included = [];
   for (const rec of taskMap.values()) {
     const t = rec.t;
-    // учёт времени включён
-    const att = t.allowTimeTracking !== undefined ? t.allowTimeTracking : t.ALLOW_TIME_TRACKING;
-    if (att !== undefined && att !== null) {
-      const enabled = att === 'Y' || att === true || att === 1 || att === '1';
-      if (!enabled) continue;
-    }
-
     const statusNum = Number(t.status);
     const isCompleted = statusNum === 5;
 
-    // задача закрыта в периоде: доверяем серверному фильтру closedDate, но если поле
-    // closedDate вернулось — перепроверяем диапазон (страховка от игнора фильтра)
-    let closedOk = rec.closed;
-    if (closedOk) {
-      const closedRaw = t.closedDate || t.CLOSED_DATE || null;
-      const closedDay = closedRaw ? String(closedRaw).slice(0, 10) : null;
-      if (closedDay) closedOk = closedDay >= dateFrom && closedDay <= dateTo;
-    }
-    // из «активного» ведра берём только реально незавершённые (страховка от игнора REAL_STATUS)
+    // Закрыта в периоде: доверяем серверному фильтру closedDate. Дату в коде НЕ
+    // перепроверяем — closedDate приходит в UTC (…Z), а Битрикс фильтрует в часовом поясе
+    // портала, поэтому наивное сравнение по дате давало бы ошибки на границах суток.
+    const closedOk = rec.closed;
+    // Из «активного» ведра берём только реально незавершённые (страховка от игнора REAL_STATUS).
     const activeOk = rec.active && !isCompleted;
 
     if (!closedOk && !activeOk) continue;

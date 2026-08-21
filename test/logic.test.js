@@ -27,10 +27,11 @@ const MASTER = [
     closedDate: null, timeEstimate: '3600', timeSpentInLogs: '0', allowTimeTracking: 'N' },
   { id: '106', title: 'Archived project task', status: '3', responsibleId: '7', groupId: '13',
     closedDate: null, timeEstimate: '3600', timeSpentInLogs: '900', allowTimeTracking: 'Y' },
-  // Долгоиграющая задача: создана давно (низкий id), но ЗАКРЫТА в июле 2026.
-  // Воспроизводит баг: раньше выпадала из окна «5000 новейших» и не показывалась.
+  // Долгоиграющая задача: создана давно (низкий id), ЗАКРЫТА в июле 2026, и учёт времени
+  // ВЫКЛЮЧЕН (allowTimeTracking=false) — как реальные задачи 1893/2097/2099 на портале.
+  // Воспроизводит оба бага: окно «5000 новейших» и фильтр по флагу учёта времени.
   { id: '1893', title: 'Long-running, closed in July', status: '5', responsibleId: '7', groupId: '147',
-    closedDate: '2026-07-15T10:00:00+03:00', timeEstimate: '3600', timeSpentInLogs: '3600', allowTimeTracking: 'Y' },
+    closedDate: '2026-07-15T10:00:00+03:00', timeEstimate: '3600', timeSpentInLogs: '3600', allowTimeTracking: false },
 ];
 
 // Эмуляция серверной фильтрации tasks.task.list
@@ -83,8 +84,10 @@ mod.__setFetch(async (url) => {
   const byId = Object.fromEntries(res.rows.map((r) => [r.id, r]));
   console.log('TEST1 ids:', res.rows.map((r) => r.id).sort());
 
-  assert.deepStrictEqual(res.rows.map((r) => r.id).sort(), ['101', '102', '104', '106'], 'wrong inclusion set');
+  // Учёт-времени-флаг больше не фильтрует → задача 105 (allowTimeTracking=N) тоже видна
+  assert.deepStrictEqual(res.rows.map((r) => r.id).sort(), ['101', '102', '104', '105', '106'], 'wrong inclusion set');
   assert.strictEqual(res.meta.periodIncludesToday, true);
+  assert.strictEqual(byId['105'].status, 'Выполняется');
 
   assert.strictEqual(byId['101'].projectName, 'Юмедика');
   assert.ok(byId['101'].projectUrl.includes('/workgroups/group/147/'));
